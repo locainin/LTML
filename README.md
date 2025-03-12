@@ -121,21 +121,25 @@ where:
   - $(f_{\theta})$ is the ML function with parameters $(\theta)$
   - $(\hat{Y})$ is the raw prediction.
     
-## 3.3. LTML Memory Consolidation
+## 3.2. LTML Memory Consolidation
 
-LTML processes and refines predictions from past cycles. The memory update function is:
+LTML processes and refines predictions from past cycles. The memory update function is now defined as:
 
-  $[M_{\psi}(Y't)=R\left(\sum{i=0}^{t}g_{\phi}(f_{\theta}(X_i),X_i)\right)]$
+```math
+  M_{\psi}(Y'_t) = R \cdot e^{-\beta t} \cdot \frac{1 - e^{\beta (t+1)}}{1 - e^{\beta}}
+```
 
 where:
   - $(M_{\psi})$ is the memory function with parameters $(\psi)$
   - $(R)$ is a filtering function that removes redundant data, merges similar patterns, and extracts key insights.
+  - The term $e^{-\beta (t-i)}$ introduces a forgetting factor that ensures older memories decay over time unless reinforced.
 
 The final, self-improving prediction function over multiple cycles is given by:
 
-  $[Y'{t+1}=g{\phi}(f_{\theta}(X_t),X_t)+M_{\psi}(Y'_t)]$
-
-This formulation ensures that each new prediction incorporates both immediate corrections and long-term learning, making the system adaptive over time.
+```math
+Y'_{t+1} = (1-\lambda) g_{\phi}(f_{\theta}(X_t),X_t) + \lambda M_{\psi}(Y'_t)
+```
+where $\lambda$ is a parameter controlling the balance between the new prediction and the consolidated memory. This formulation ensures that each new prediction incorporates both immediate corrections and long-term learning, making the system adaptive over time.
 
 # 4.) LTML Sleep Phase: How Memory is Refined
 
@@ -155,10 +159,10 @@ During idle periods, the LTML module processes stored data:
   - Memory Consolidation: Merges past experiences into structured insights.
   - Key Learning Extraction: Summarizes important concepts for future use.
 
-Mathematically, the filtering function ( R ) is defined as:
-
-  $[R(Y')=\text{Sort}(Y')+\text{Merge}(Y')+\text{Extract}(Y')]$
-
+Mathematically, the filtering function $(R)$ is defined as:
+  ```math
+  R(Y') = \text{Sort}[Y'] + \text{Merge}[Y'] + \text{Extract}[Y']
+```
 where:
 
   - Sort: Removes redundant entries.
@@ -179,15 +183,15 @@ This phase ensures that the AI retains context and knowledge over multiple sessi
 
   - Issue: The filtering process may accidentally delete rare but crucial outliers.
   - Solution: Assign an importance score $( S_i )$ to each memory item:
-  
-    $[S_i=\frac{1}{f_i+\epsilon}]$
-
-where $(f_i)$ is the frequency of occurrence of item $(i)$ and $(\epsilon)$ is a small constant. Items with a high $(S_i)$  (indicating rarity) are preserved by setting a threshold $( T )$ such that if $(S_i>T)$, the item is retained.
+  ```math
+    [S_i=\frac{1}{f_i+\epsilon}]
+```
+where $(f_i)$ is the frequency of occurrence of item $(i)$ and $(\epsilon)$ is a small constant. Items with a high $(S_i)$ (indicating rarity) are preserved by setting a threshold $( T )$ such that if $(S_i>T)$, the item is retained.
 
   - Related Technique: Adapt ideas from Elastic Weight Consolidation (EWC), where the loss function penalizes changes to critical parameters:
-
-    $[L(\theta)=L_{\text{new}}(\theta)+\sum_i\frac{\lambda}{2}F_i(\theta_i-\theta_i*)2]$
-
+  ```math
+    L(\theta) = L_{\text{new}}(\theta) + \frac{\lambda}{2} \sum_i F_i (\theta_i - \theta_i^*)^2
+  ```
 Here, the penalty term encourages retention of important information—this concept can be translated into our memory filtering process.
 
 5.2. Memory Injection Timing & Overhead
@@ -195,40 +199,41 @@ Here, the penalty term encourages retention of important information—this conc
   - Issue: If memory injection is too frequent, it adds computational overhead; too infrequent, and the model fails to benefit from its long-term memory.
 
   - Solution: Use a reinforcement learning $(RL)$ scheduling policy that optimizes the injection interval $(\tau)$. Define a cost function that balances computational overhead $(C(\tau))$ and prediction error $(L_{\text{error}}(\tau))$:
-
-      $[\pi^*=\arg\min_{\pi}\mathbb{E}\left[C(\tau)+L_{\text{error}}(\tau)\right]]$
-
+  ```math
+      [\pi^*=\arg\min_{\pi}\mathbb{E}\left[C(\tau)+L_{\text{error}}(\tau)\right]]
+  ```
 The RL agent adjusts $(\tau)$ dynamically based on system performance metrics. 
 
 5.3. Scaling Challenges
 
   - Issue: Traditional memory systems may struggle to scale when handling billions of parameters.
   - Solution: Employ scalable retrieval methods like vectorized Retrieval Augmented Generation (RAG) or neural memory embeddings. For instance, compute similarity between a query vector $( q )$ and key vectors $( k )$ using the cosine similarity:
-
-    $[\text{score}(q,k)=\frac{q\cdot k}{|q||k|}]$
-
+  ```math
+    \text{cosine similarity} = \cos(\theta) = \frac{\mathbf{A} \cdot \mathbf{B}}{\|\mathbf{A}\| \|\mathbf{B}\|} = \frac{\sum_{i=1}^{n} A_i B_i}{\sqrt{\sum_{i=1}^{n} A_i^2} \cdot \sqrt{\sum_{i=1}^{n} B_i^2}}
+  ```
 Advanced indexing techniques and approximate nearest neighbor (ANN) searches further ensure efficient retrieval at scale.
 
 5.4. Handling Conflicting Data
 
   - Issue: New data might contradict previously stored knowledge.
-  - Solution: Introduce a meta-model that aggregates conflicting inputs through weighted averaging. If $( y_i )$ are predictions with reliability weights $( w_i )$:
-
-    $[\hat{y}=\frac{\sum_i w_i y_i}{\sum_i w_i}]$
-
-Monitor the variance of ( y_i ) values to detect conflicts. High variance can trigger anomaly flags or human review.
+  - Solution: Introduce a meta-model that aggregates conflicting inputs through weighted averaging. If $( y_i )$ are predictions with reliability weights $( w_i )$ and associated confidence scores $( s_i )$, then:
+  ```math
+  \hat{y} = \frac{\sum_{i=0}^{t} e^{-\beta (t - i)} s_i y_i}{\sum_{i=0}^{t} e^{-\beta (t - i)} s_i}
+  ```
+This weighted approach ensures that data with higher confidence contributes more significantly, thereby mitigating conflicts.
 
 5.5. Sleep Phase Computational Expense
 
   - Issue: The processing during sleep mode (filtering, merging, and extraction) can become a computational bottleneck.
-  - Solution: Optimize with efficient unsupervised techniques. For example, use $(k)-$ means clustering to summarize data:
+  - Solution: Optimize with efficient unsupervised techniques. For example, use $(k)$-means clustering to summarize data:
 
-    $[\mu_j=\frac{1}{|C_j|}\sum_{x_i\in C_j}x_i]$
-
+  ```math
+    [\mu_j=\frac{1}{|C_j|}\sum_{x_i\in C_j}x_i]
+  ```
 Alternatively, leverage an autoencoder that minimizes reconstruction loss:
-
-  $[ L_{\text{rec}} = | x - \hat{x} |^2 ]$
-
+  ```math
+  [ L_{\text{rec}} = | x - \hat{x} |^2 ]
+  ```
 Both methods reduce data redundancy while preserving critical insights, especially when run on parallelized hardware or accelerators.
 
 # 6.) Implementation Strategy
@@ -241,7 +246,7 @@ Both methods reduce data redundancy while preserving critical insights, especial
 
 6.2. AI Oversight Layer
 
-  - Utilize pre-trained transformer models(e.g., ollama models) 
+  - Utilize pre-trained transformer models (e.g., ollama models) 
   - Fine-tune on validation tasks to effectively correct ML outputs.
 
 6.3. LTML Memory System
@@ -256,9 +261,9 @@ The system’s performance is tracked using:
   - Prediction Accuracy $((\alpha)):$
 $[\alpha=\frac{\text{Corrected Predictions}}{\text{Total Predictions}}]$
   - Confidence Adjustment $(( \beta )):$
-$[ \beta = \frac{\sum (g_{\phi}(\hat{y}, x) - \hat{y})}{N} ]$
+$\beta = \frac{\sum_{i=0}^{t} (g_{\phi}(\hat{y}_i, x_i) - \hat{y}_i)}{t}$
   - Memory Efficiency $(( \gamma )):$
-$[ \gamma = \frac{\text{Retained Key Data}}{\text{Total Stored Data}} ]$
+$[ \gamma = \frac{\text{Retained Key Data}}{\text{Total Stored Data}}]$
 
 These metrics ensure continuous validation, error correction, and memory optimization.
 
