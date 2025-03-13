@@ -120,7 +120,7 @@ The ML model learns a function:
 where: 
   - $(f_{\theta})$ is the ML function with parameters $(\theta)$
   - $(\hat{Y})$ is the raw prediction.
-    
+
 ## 3.2. LTML Memory Consolidation
 
 LTML processes and refines predictions from past cycles. The memory update function is now defined as:
@@ -130,16 +130,34 @@ LTML processes and refines predictions from past cycles. The memory update funct
 ```
 
 where:
-  - $(M_{\psi})$ is the memory function with parameters $(\psi)$
-  - $(R)$ is a filtering function that removes redundant data, merges similar patterns, and extracts key insights.
+  - $M_{\psi}$ is the memory function with parameters $\psi$
+  - $R$ is a filtering function that removes redundant data, merges similar patterns, and extracts key insights.
   - The term $e^{-\beta (t-i)}$ introduces a forgetting factor that ensures older memories decay over time unless reinforced.
 
 The final, self-improving prediction function over multiple cycles is given by:
 
 ```math
-Y'_{t+1} = (1-\lambda) g_{\phi}(f_{\theta}(X_t),X_t) + \lambda M_{\psi}(Y'_t)
+Y'_{t+1} = (1-\lambda) g_{\phi}(f_{\theta}(X_t), X_t) + \lambda M_{\psi}(Y'_t)
 ```
+
 where $\lambda$ is a parameter controlling the balance between the new prediction and the consolidated memory. This formulation ensures that each new prediction incorporates both immediate corrections and long-term learning, making the system adaptive over time.
+
+**Monte Carlo Simulation and Associative Memory Integration:**
+
+1. **Associative Memory Lookup**: Before the consolidation in Phase 2, we use the **probabilistic association model** to filter relevant past memories based on the current context.
+   - For each memory item, we calculate the **associative probability**:
+
+```math
+    P(y|x) = \frac{ e^{\frac{1}{\tau} \cdot \text{assoc}(x, y)}}{\sum_{y'} e^{\frac{1}{\tau} \cdot \text{assoc}(x, y')}}
+```
+   - $assoc(x, y)$ could be calculated using **cosine similarity** or other distance metrics between the current context $x$ and memory items $y$.
+
+2. **Monte Carlo Simulation**: To decide which memory or association to prioritize, run **Monte Carlo simulations**:
+   - **Monte Carlo Simulation** is used to sample a variety of potential memories based on the calculated associative probabilities:
+```math
+     Y'_{t+1} = \alpha(t) \cdot g_{\phi}(f_{\theta}(X_t), X_t) + (1-\alpha(t)) \cdot M_{\psi}(Y'_t)
+```
+   - Here, $\alpha(t)$ is dynamically adjusted to balance new predictions and consolidated memory. **Monte Carlo sampling** helps pick the most relevant memory for the given context after several trials.
 
 # 4.) LTML Sleep Phase: How Memory is Refined
 
@@ -148,7 +166,7 @@ LTML employs a three-phase process to consolidate and optimize memory:
 4.1. Phase 1: Inference Mode (Active Learning)
 
   - The ML model generates raw predictions $(\hat{Y})$
-  - The AI oversight refines these into $(Y')$
+  - The AI oversight refines these into $Y'$
   - All interactions are stored in the memory database.
     
 4.2. Phase 2: Sleep Mode (Memory Optimization)
@@ -159,19 +177,32 @@ During idle periods, the LTML module processes stored data:
   - Memory Consolidation: Merges past experiences into structured insights.
   - Key Learning Extraction: Summarizes important concepts for future use.
 
-Mathematically, the filtering function $(R)$ is defined as:
-  ```math
+**Associative Memory Sampling**:
+
+- Here, **associative lookup** is used to retrieve **relevant memories** based on their **associative probabilities** with the current input context. This step speeds up the model’s ability to focus on the most relevant data, reducing unnecessary search time.
+- This process will involve calculating the **associative probabilities** using the formula:
+
+```math
+  P(y|x) = \frac{ e^{\frac{1}{\tau} \cdot \text{assoc}(x, y)}}{\sum_{y'} e^{\frac{1}{\tau} \cdot \text{assoc}(x, y')}}
+```
+
+- After calculating the associations, **Monte Carlo simulation** will be used to sample a set of possible memories:
+  - The most **probable memory** or the **one with the highest sampling frequency** is selected for consolidation.
+
+Mathematically, the filtering function $R$ is defined as:
+
+```math
   R(Y') = \text{Sort}[Y'] + \text{Merge}[Y'] + \text{Extract}[Y']
 ```
-where:
 
+where:
   - Sort: Removes redundant entries.
   - Merge: Combines similar knowledge items.
   - Extract: Retains only the most valuable insights.
 
 4.3. Phase 3: Wake-Up Mode (Memory Injection)
 
-  - The optimized memory $(M_{\psi})$ is reloaded into the system.
+  - The optimized memory $M_{\psi}$ is reloaded into the system.
   - The AI oversight layer adjusts its correction function using this refined past data.
   - The system continuously improves without the need for full retraining.
 
@@ -182,27 +213,28 @@ This phase ensures that the AI retains context and knowledge over multiple sessi
 5.1. Catastrophic Forgetting Risks
 
   - Issue: The filtering process may accidentally delete rare but crucial outliers.
-  - Solution: Assign an importance score $( S_i )$ to each memory item:
-  ```math
-    [S_i=\frac{1}{f_i+\epsilon}]
+  - Solution: Assign an importance score $S_i$ to each memory item:
+```math
+    S_i = \frac{1}{f_i + \epsilon}
 ```
-where $(f_i)$ is the frequency of occurrence of item $(i)$ and $(\epsilon)$ is a small constant. Items with a high $(S_i)$ (indicating rarity) are preserved by setting a threshold $( T )$ such that if $(S_i>T)$, the item is retained.
+where $f_i$ is the frequency of occurrence of item $(i)$ and $\epsilon$ is a small constant. Items with a high $S_i$ (indicating rarity) are preserved by setting a threshold @T@ such that if $S_i > T$, the item is retained.
 
   - Related Technique: Adapt ideas from Elastic Weight Consolidation (EWC), where the loss function penalizes changes to critical parameters:
-  ```math
+```math
     L(\theta) = L_{\text{new}}(\theta) + \frac{\lambda}{2} \sum_i F_i (\theta_i - \theta_i^*)^2
-  ```
+```
 Here, the penalty term encourages retention of important information—this concept can be translated into our memory filtering process.
 
 5.2. Memory Injection Timing & Overhead
 
   - Issue: If memory injection is too frequent, it adds computational overhead; too infrequent, and the model fails to benefit from its long-term memory.
 
-  - Solution: Use a reinforcement learning $(RL)$ scheduling policy that optimizes the injection interval $(\tau)$. Define a cost function that balances computational overhead $(C(\tau))$ and prediction error $(L_{\text{error}}(\tau))$:
-  ```math
-      [\pi^*=\arg\min_{\pi}\mathbb{E}\left[C(\tau)+L_{\text{error}}(\tau)\right]]
-  ```
-The RL agent adjusts $(\tau)$ dynamically based on system performance metrics. 
+  - Solution: Use a reinforcement learning $RL$ scheduling policy that optimizes the injection interval $(τ)$. Define a cost function that balances computational overhead $(C(τ))$ and prediction error $(L_{\text{error}}(τ))$:
+```math
+    \pi^* = \arg \min_{\pi} \mathbb{E} \left[ C(\tau) + L_{\text{error}}(\tau) \right]
+```
+The RL agent adjusts $(τ)$ dynamically based on system performance metrics. 
+
 
 5.3. Scaling Challenges
 
